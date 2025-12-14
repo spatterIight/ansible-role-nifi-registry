@@ -1,0 +1,62 @@
+{#
+SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+SPDX-FileCopyrightText: 2025 Suguru Hirahara
+SPDX-FileCopyrightText: 2025 spatterlight
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+#}
+
+{% if nifi_registry_container_labels_traefik_enabled %}
+traefik.enable=true
+
+{% if nifi_registry_container_labels_traefik_docker_network %}
+traefik.docker.network={{ nifi_registry_container_labels_traefik_docker_network }}
+{% endif %}
+
+{% set middlewares = [] %}
+
+{% if nifi_registry_container_labels_traefik_path_prefix != '/' %}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-slashless-redirect.redirectregex.regex=^({{ nifi_registry_container_labels_traefik_path_prefix | quote }})$
+traefik.http.middlewares.{{ nifi_registry_identifier }}-slashless-redirect.redirectregex.replacement=${1}/
+{% set middlewares = middlewares + [nifi_registry_identifier + '-slashless-redirect'] %}
+{% endif %}
+
+{% if nifi_registry_container_labels_traefik_path_prefix != '/' %}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-strip-prefix.stripprefix.prefixes={{ nifi_registry_container_labels_traefik_path_prefix }}
+{% set middlewares = middlewares + [nifi_registry_identifier + '-strip-prefix'] %}
+{% endif %}
+
+{% if nifi_registry_container_labels_traefik_additional_request_headers.keys() | length > 0 %}
+{% for name, value in nifi_registry_container_labels_traefik_additional_request_headers.items() %}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-add-request-headers.headers.customrequestheaders.{{ name }}={{ value }}
+{% endfor %}
+{% set middlewares = middlewares + [nifi_registry_identifier + '-add-request-headers'] %}
+{% endif %}
+
+{% if nifi_registry_container_labels_traefik_additional_response_headers.keys() | length > 0 %}
+{% for name, value in nifi_registry_container_labels_traefik_additional_response_headers.items() %}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-add-response-headers.headers.customresponseheaders.{{ name }}={{ value }}
+{% endfor %}
+{% set middlewares = middlewares + [nifi_registry_identifier + '-add-response-headers'] %}
+{% endif %}
+
+traefik.http.routers.{{ nifi_registry_identifier }}.rule={{ nifi_registry_container_labels_traefik_rule }}
+{% if nifi_registry_container_labels_traefik_priority | int > 0 %}
+traefik.http.routers.{{ nifi_registry_identifier }}.priority={{ nifi_registry_container_labels_traefik_priority }}
+{% endif %}
+traefik.http.routers.{{ nifi_registry_identifier }}.service={{ nifi_registry_identifier }}
+{% if middlewares | length > 0 %}
+traefik.http.routers.{{ nifi_registry_identifier }}.middlewares={{ middlewares | join(',') }}
+{% endif %}
+traefik.http.routers.{{ nifi_registry_identifier }}.entrypoints={{ nifi_registry_container_labels_traefik_entrypoints }}
+traefik.http.routers.{{ nifi_registry_identifier }}.tls={{ nifi_registry_container_labels_traefik_tls | to_json }}
+{% if nifi_registry_container_labels_traefik_tls %}
+traefik.http.routers.{{ nifi_registry_identifier }}.tls.certResolver={{ nifi_registry_container_labels_traefik_tls_certResolver }}
+{% endif %}
+
+traefik.http.services.{{ nifi_registry_identifier }}.loadbalancer.server.port={{ nifi_registry_container_https_port }}
+traefik.http.services.{{ nifi_registry_identifier }}.loadbalancer.server.scheme=https
+traefik.http.services.{{ nifi_registry_identifier }}.loadbalancer.serverstransport={{ nifi_registry_container_labels_traefik_serverstransport }}
+{% endif %}
+
+{{ nifi_registry_container_labels_additional_labels }}

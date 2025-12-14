@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2025 Suguru Hirahara
+# SPDX-FileCopyrightText: 2025 spatterlight
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Check existence of Apache NiFi Registry systemd service
+  ansible.builtin.stat:
+    path: "{{ devture_systemd_docker_base_systemd_path }}/{{ nifi_registry_identifier }}.service"
+  register: nifi_registry_service_stat
+
+- name: Uninstall Apache NiFi Registry systemd services and files
+  when: nifi_registry_service_stat.stat.exists | bool
+  block:
+    - name: Ensure Apache NiFi Registry systemd service is stopped
+      ansible.builtin.service:
+        name: "{{ nifi_registry_identifier }}"
+        state: stopped
+        enabled: false
+        daemon_reload: true
+
+    - name: Ensure Apache NiFi Registry systemd service does not exist
+      ansible.builtin.file:
+        path: "{{ devture_systemd_docker_base_systemd_path }}/{{ nifi_registry_identifier }}.service"
+        state: absent
+
+    - name: Ensure Apache NiFi Registry support files do not exist
+      ansible.builtin.file:
+        path: "{{ nifi_registry_base_path }}/{{ item }}"
+        state: absent
+      with_items:
+        - env
+        - labels
+
+    - name: Ensure Apache NiFi Registry image source files path does not exist
+      ansible.builtin.file:
+        path: "{{ nifi_registry_container_image_self_build_src_files_path }}"
+        state: absent
+
+    - name: Ensure Apache NiFi Registry local data path does not exist if empty
+      ansible.builtin.command:
+        cmd: "rmdir {{ nifi_registry_data_path }}"
+      register: nifi_registry_data_path_deletion_result
+      changed_when: nifi_registry_data_path_deletion_result.rc == 0
+      failed_when: false
+
+    - name: Ensure Apache NiFi Registry base path does not exist if empty
+      ansible.builtin.command:
+        cmd: "rmdir {{ nifi_registry_base_path }}"
+      register: nifi_registry_base_path_deletion_result
+      changed_when: nifi_registry_base_path_deletion_result.rc == 0
+      failed_when: false
+
+    - name: Ensure Apache NiFi Registry container network does not exist via community.docker.docker_network
+      when: devture_systemd_docker_base_container_network_creation_method == 'ansible-module'
+      community.docker.docker_network:
+        name: "{{ nifi_registry_container_network }}"
+        state: absent
+
+    - name: Ensure Apache NiFi Registry container network does not exist via ansible.builtin.command
+      when: devture_systemd_docker_base_container_network_creation_method == 'command'
+      ansible.builtin.command:
+        cmd: >-
+          {{ devture_systemd_docker_base_host_command_docker }} network rm
+          {{ nifi_registry_container_network }}
+      register: network_deletion_result
+      changed_when: nifi_registry_container_network in network_deletion_result.stdout
+
+- name: Check existence of Apache NiFi Registry local data path
+  ansible.builtin.stat:
+    path: "{{ nifi_registry_data_path }}"
+  register: nifi_registry_data_path_stat
+
+# We just want to notify the user. Deleting data is too destructive.
+- name: Notify if Apache NiFi Registry local data remains
+  when: nifi_registry_data_path_stat.stat.exists | bool
+  ansible.builtin.set_fact:
+    devture_playbook_runtime_messages_list: |
+      {{
+        devture_playbook_runtime_messages_list | default([])
+        +
+        [
+          "Note: As the local Apache NiFi Registry instance has been removed, some old data remains in `" + nifi_registry_data_path + "`. Feel free to delete it."
+        ]
+      }}
