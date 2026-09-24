@@ -4,89 +4,77 @@
 # SPDX-FileCopyrightText: 2024 Sergio Durigan Junior
 # SPDX-FileCopyrightText: 2025 MASH project contributors
 # SPDX-FileCopyrightText: 2025 Suguru Hirahara
-# SPDX-FileCopyrightText: 2025 spatterlight
+# SPDX-FileCopyrightText: 2025 - 2026 spatterlight
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-# Project source code URL: https://github.com/apache/nifi-registry-registry
+# Project source code URL: https://github.com/apache/nifi/tree/main/nifi-registry
 
-nifi_registry_registry_enabled: true
+nifi_registry_enabled: true
 
-nifi_registry_registry_identifier: nifi-registry
+nifi_registry_identifier: nifi-registry
 nifi_registry_base_path: "/{{ nifi_registry_identifier }}"
 nifi_registry_data_path: "{{ nifi_registry_base_path }}/data"
 nifi_registry_scripts_path: "{{ nifi_registry_base_path }}/scripts"
-nifi_registry_certs_path: "{{ nifi_registry_base_path }}/certs"
 
 # renovate: datasource=docker depName=apache/nifi-registry versioning=semver
-nifi_registry_version: 2.6.0
+nifi_registry_version: 2.12.0
 
 nifi_registry_uid: ""
 nifi_registry_gid: ""
 
+# The group that owns the Apache NiFi Registry installation inside the container image (`nifi`, gid 1000).
+#
+# The container runs as `nifi_registry_uid`:`nifi_registry_gid`, but the image only grants its own `nifi`
+# user and group access to parts of the installation (`lib/` is `rwxrwx---`). Adding this group as a
+# supplementary group is what lets the process start when `nifi_registry_uid` is anything other than 1000.
+nifi_registry_container_image_gid: 1000
+
 # The hostname at which Apache NiFi Registry is served.
 nifi_registry_hostname: ""
 
-# A passphrase used to generate a self-signed certificate
-# which is used to serve Apache NiFi Registry via HTTPS internally
-nifi_registry_self_signed_cert_passphrase: ""
-
-# A passphrase used to encrypt sensitive values inputted into NiFi Registry
-# Generate one using `pwgen -s 64 1`, or some other way
-nifi_registry_sensitive_props_key: ""
-
-# The default login credentials to configure
-# The password must be at least 12 characters, generate one using `pwgen -s 32 1`, or some other way
-# The salt must be exactly 22 characters, and does not necessarily need to be changed from default value
-#
-# These variables are used by the `nifi_registry_login_identity_providers_xml_replacements_default` variable
-nifi_registry_login_username: admin
-nifi_registry_login_password: ""
-nifi_registry_login_salt: 0tfETQ5kFWhcT4oPwdbHbL
-
 # The path at which Apache NiFi Registry is exposed.
-# This value must either be `/` or not end with a slash (e.g. `/nifi`).
+# This value must either be `/` or not end with a slash (e.g. `/nifi-registry`).
 #
-# Hosting Apache NiFi Registry under a subpath does not seem to be possible due to Apache NiFi Registry's
-# technical limitations.
+# Hosting Apache NiFi Registry under a subpath is not supported: its web interface and API
+# are hard-wired to `/nifi-registry/` and `/nifi-registry-api/`.
 nifi_registry_path_prefix: /
-
-# Controls whether Ansible logs the following tasks:
-# 1. "Ensure Apache NiFi Registry properties configuration files have the defined adjustments"
-#
-# By default this is set to true such that passwords are not printed to the log
-# However, this also obscures errors if the task fails for some reason, to log the error
-# you can temporarily set this variable to false via the `-e nifi_registry_no_log=false` command line argument
-nifi_registry_no_log: true
 
 nifi_registry_container_image: "{{ nifi_registry_container_image_registry_prefix }}apache/nifi-registry:{{ nifi_registry_container_image_tag }}"
 nifi_registry_container_image_tag: "{{ nifi_registry_version }}"
 nifi_registry_container_image_registry_prefix: "{{ nifi_registry_container_image_registry_prefix_upstream }}"
 nifi_registry_container_image_registry_prefix_upstream: "{{ nifi_registry_container_image_registry_prefix_upstream_default }}"
 nifi_registry_container_image_registry_prefix_upstream_default: docker.io/
-nifi_registry_container_image_force_pull: "{{ nifi_registry_container_image.endswith(':latest') }}"
-
-nifi_registry_container_image_self_build: false
-nifi_registry_container_image_self_build_name: "apache/nifi-registry:{{ nifi_registry_container_image_self_build_repo_version }}"
-nifi_registry_container_image_self_build_repo: "https://github.com/apache/nifi-registry.git"
-nifi_registry_container_image_self_build_repo_version: "{{ 'v' + nifi_registry_version if nifi_registry_version != 'latest' else 'main' }}"
-nifi_registry_container_image_self_build_src_files_path: "{{ nifi_registry_base_path }}/docker-src"
-
-# Controls whether the container exposes its HTTPS port (tcp/8443 in the container).
-#
-# Takes an "<ip>:<port>" or "<port>" value (e.g. "127.0.0.1:2586"), or empty string to not expose.
-nifi_registry_container_https_host_bind_port: ""
 
 # The base container network. It will be auto-created by this role if it doesn't exist already.
+#
+# Apache NiFi Registry serves plain HTTP (see `nifi_registry_container_http_port`) and performs
+# no authentication of its own. Anything attached to this network can read and write its flows,
+# so only attach containers you trust, such as the Apache NiFi instances that use it.
+# From such a container, Apache NiFi Registry is reachable at
+# `http://{{ nifi_registry_identifier }}:{{ nifi_registry_container_http_port }}`.
 nifi_registry_container_network: "{{ nifi_registry_identifier }}"
 
-# The port number in the container
-nifi_registry_container_https_port: 8443
+# Controls whether the container exposes its HTTP port (tcp/18080 in the container).
+#
+# Takes an "<ip>:<port>" or "<port>" value (e.g. "127.0.0.1:18080"), or empty string to not expose.
+#
+# Anything that can reach the published port has full, unauthenticated access to Apache NiFi Registry,
+# so bind it to a loopback or otherwise private address.
+nifi_registry_container_http_host_bind_port: ""
+
+# The port number that Apache NiFi Registry listens on inside the container.
+#
+# This drives `nifi.registry.web.http.port` in `nifi-registry.properties` (see `nifi_registry_properties_replacements_default`),
+# the container port that `nifi_registry_container_http_host_bind_port` publishes,
+# and the port Traefik sends traffic to (see `../templates/labels.j2`).
+nifi_registry_container_http_port: 18080
 
 # A list of additional container networks that the container would be connected to.
 # The role does not create these networks, so make sure they already exist.
-# Use this to expose this container to another reverse proxy, which runs in a different container network.
+# Use this to expose this container to another reverse proxy, which runs in a different container network,
+# or to make it reachable from Apache NiFi containers on their own network.
 nifi_registry_container_additional_networks: "{{ nifi_registry_container_additional_networks_auto + nifi_registry_container_additional_networks_custom }}"
 nifi_registry_container_additional_networks_auto: []
 nifi_registry_container_additional_networks_custom: []
@@ -107,13 +95,49 @@ nifi_registry_container_additional_volumes_custom: []
 nifi_registry_container_labels_traefik_enabled: true
 nifi_registry_container_labels_traefik_docker_network: "{{ nifi_registry_container_network }}"
 nifi_registry_container_labels_traefik_hostname: "{{ nifi_registry_hostname }}"
-# The path prefix must either be `/` or not end with a slash (e.g. `/nifi`).
+# The path prefix must either be `/` or not end with a slash (e.g. `/nifi-registry`).
 nifi_registry_container_labels_traefik_path_prefix: "{{ nifi_registry_path_prefix }}"
 nifi_registry_container_labels_traefik_rule: "Host(`{{ nifi_registry_container_labels_traefik_hostname }}`){% if nifi_registry_container_labels_traefik_path_prefix != '/' %} && PathPrefix(`{{ nifi_registry_container_labels_traefik_path_prefix }}`){% endif %}"
 nifi_registry_container_labels_traefik_priority: 0
 nifi_registry_container_labels_traefik_entrypoints: web-secure
 nifi_registry_container_labels_traefik_tls: "{{ nifi_registry_container_labels_traefik_entrypoints != 'web' }}"
 nifi_registry_container_labels_traefik_tls_certResolver: default  # noqa var-naming
+
+# Controls whether requests to the root path (`/`) are redirected to Apache NiFi Registry's web interface,
+# which lives at `/nifi-registry/`. Apache NiFi Registry itself answers `/` with a 404.
+nifi_registry_container_labels_traefik_root_redirect_enabled: true
+
+# Controls whether Traefik requires HTTP basic authentication for every request it routes to Apache NiFi Registry.
+#
+# Apache NiFi Registry runs unsecured (it has no username/password login of its own), so this middleware is
+# the only thing standing between the public hostname and full read/write access. It is enabled by default,
+# and the role refuses to run with it enabled but `nifi_registry_basic_auth_password` empty.
+#
+# Only disable it if something else in front of Traefik (e.g. a forward-auth / SSO middleware you add via
+# `nifi_registry_container_labels_traefik_additional_middlewares_custom`) authenticates requests instead.
+nifi_registry_container_labels_traefik_basic_auth_enabled: true
+
+# The `username:hash` entries the basic-auth middleware accepts.
+# By default this is the single user defined by `nifi_registry_basic_auth_username` / `nifi_registry_basic_auth_password`.
+# To accept additional users, add `username:hash` strings (e.g. generated via `htpasswd -nbB user password`)
+# to `nifi_registry_container_labels_traefik_basic_auth_users_custom`.
+nifi_registry_container_labels_traefik_basic_auth_users: "{{ nifi_registry_container_labels_traefik_basic_auth_users_default + nifi_registry_container_labels_traefik_basic_auth_users_custom }}"
+nifi_registry_container_labels_traefik_basic_auth_users_default: |-
+  {{
+    [nifi_registry_basic_auth_username + ':' + nifi_registry_basic_auth_password | password_hash(hashtype='bcrypt', salt=nifi_registry_basic_auth_salt, ident='2y')]
+    if nifi_registry_basic_auth_password | length > 0 else []
+  }}
+nifi_registry_container_labels_traefik_basic_auth_users_custom: []
+
+# The credentials the Traefik basic-auth middleware asks for (see `nifi_registry_container_labels_traefik_basic_auth_enabled`).
+# Generate a password using `pwgen -s 32 1`, or some other way.
+#
+# The password is bcrypt-hashed with a fixed salt, so that re-running the playbook does not produce a different hash
+# (and needlessly restart the service) every time. The salt must be exactly 22 characters from the bcrypt alphabet
+# (`./A-Za-z0-9`) and does not necessarily need to be changed from the default value.
+nifi_registry_basic_auth_username: admin
+nifi_registry_basic_auth_password: ""
+nifi_registry_basic_auth_salt: 0tfETQ5kFWhcT4oPwdbHbL
 
 # Controls which additional headers to attach to all HTTP requests.
 # To add your own custom request headers, use `nifi_registry_container_labels_traefik_additional_request_headers_custom`
@@ -135,22 +159,33 @@ nifi_registry_container_labels_traefik_additional_response_headers_auto: |
   }}
 nifi_registry_container_labels_traefik_additional_response_headers_custom: {}
 
-# Controls which `serversTransports` Traefik uses to route traffic to the NiFi Registry backend
-# Useful for setting a custom serversTransports which disables HTTPS certificate verification on the backend
-nifi_registry_traefik_serverstransport: insecure-nifi-registry-transport
-nifi_registry_container_labels_traefik_serverstransport: "{{ nifi_registry_traefik_serverstransport }}@file"
+# A list of additional Traefik middlewares (e.g. `my-sso@file`) to attach to the router, after the ones this role defines.
+nifi_registry_container_labels_traefik_additional_middlewares: "{{ nifi_registry_container_labels_traefik_additional_middlewares_auto + nifi_registry_container_labels_traefik_additional_middlewares_custom }}"
+nifi_registry_container_labels_traefik_additional_middlewares_auto: []
+nifi_registry_container_labels_traefik_additional_middlewares_custom: []
 
-# nifi_registry_container_labels_additional_labels contains a multiline string with additional labels to add to the container label file.
+# nifi_registry_container_labels_additional_labels contains a list of additional labels to add to the container label file.
 # See `../templates/labels.j2` for details.
+# To add your own custom labels, use `nifi_registry_container_labels_additional_labels_custom`
 #
 # Example:
-# nifi_registry_container_labels_additional_labels: |
-#   my.label=1
-#   another.label="here"
-nifi_registry_container_labels_additional_labels: ""
+# nifi_registry_container_labels_additional_labels_custom:
+#   - my.label=1
+#   - another.label="here"
+nifi_registry_container_labels_additional_labels: "{{ nifi_registry_container_labels_additional_labels_auto + nifi_registry_container_labels_additional_labels_custom }}"
+nifi_registry_container_labels_additional_labels_auto: []
+nifi_registry_container_labels_additional_labels_custom: []
 
-# A list of extra arguments to pass to the container (`docker run` command)
-nifi_registry_container_extra_arguments: []
+# A list of extra arguments to pass to the container (`docker create` command)
+nifi_registry_container_extra_arguments: "{{ nifi_registry_container_extra_arguments_auto + nifi_registry_container_extra_arguments_custom }}"
+nifi_registry_container_extra_arguments_auto: []
+nifi_registry_container_extra_arguments_custom: []
+
+# A list of extra arguments to pass to the process inside the container
+# Example: ['--SOME_ARGUMENT']
+nifi_registry_process_extra_arguments: "{{ nifi_registry_process_extra_arguments_auto + nifi_registry_process_extra_arguments_custom }}"
+nifi_registry_process_extra_arguments_auto: []
+nifi_registry_process_extra_arguments_custom: []
 
 # Specifies the value of the `X-XSS-Protection` header
 # Stops pages from loading when they detect reflected cross-site scripting (XSS) attacks.
@@ -211,139 +246,113 @@ nifi_registry_systemd_wanted_services_list_default: []
 nifi_registry_systemd_wanted_services_list_auto: []
 nifi_registry_systemd_wanted_services_list_custom: []
 
-# nifi_registry_environment_variables_additional_variables contains a multiline string with additional environment variables to pass to the container.
+# Controls how long to wait for the container to stop gracefully before killing it.
+nifi_registry_container_stop_grace_time_seconds: "{{ devture_systemd_docker_base_container_stop_grace_time_seconds }}"
+
+# Controls how long the pre-start cleanup should wait for stale container-name release
+# before failing startup explicitly.
+nifi_registry_container_cleanup_timeout_seconds: "{{ devture_systemd_docker_base_container_cleanup_timeout_seconds }}"
+
+# Controls the delay between pre-start cleanup retries.
+nifi_registry_container_cleanup_retry_delay_seconds: "{{ devture_systemd_docker_base_container_cleanup_retry_delay_seconds }}"
+
+# Shell command used in the systemd pre-start phase to deterministically remove a stale
+# container and wait until Docker releases its name.
+nifi_registry_container_cleanup_command: |
+  i=0;
+  while [ "$i" -lt {{ nifi_registry_container_cleanup_timeout_seconds }} ]; do
+  {{ devture_systemd_docker_base_host_command_docker }} stop -t {{ nifi_registry_container_stop_grace_time_seconds }} {{ nifi_registry_identifier }} >/dev/null 2>&1 || true;
+  {{ devture_systemd_docker_base_host_command_docker }} rm -f {{ nifi_registry_identifier }} >/dev/null 2>&1 || true;
+  if {{ devture_systemd_docker_base_host_command_docker }} container inspect {{ nifi_registry_identifier }} >/dev/null 2>&1; then
+  i=$((i + 1));
+  sleep {{ nifi_registry_container_cleanup_retry_delay_seconds }};
+  continue;
+  fi;
+  if {{ devture_systemd_docker_base_host_command_docker }} info >/dev/null 2>&1; then
+  exit 0;
+  fi;
+  echo "Failed to query Docker daemon while cleaning up {{ nifi_registry_identifier }}" >&2;
+  exit 1;
+  done;
+  echo "Failed to remove stale container {{ nifi_registry_identifier }} after {{ nifi_registry_container_cleanup_timeout_seconds }} attempts" >&2;
+  exit 1
+
+# Controls whether Ansible logs the following tasks:
+# 1. "Ensure Apache NiFi Registry properties configuration files have the defined adjustments"
 #
-# **It is recommended that you do NOT add any NiFi Registry environment variables,
-# due to technical limitations they will cause tasks to be marked as changed when they aren't,
-# since environment variables trigger write operations to the configuration files which causes conflicts with Ansible**
-#
-# Example:
-# nifi_registry_environment_variables_additional_variables: |
-#   VAR=1
-#   ANOTHER=value
-nifi_registry_environment_variables_additional_variables: ""
+# By default this is set to true such that passwords (e.g. `nifi.registry.db.password`) are not printed to the log.
+# However, this also obscures errors if the task fails for some reason, to log the error
+# you can temporarily set this variable to false via the `-e nifi_registry_no_log=false` command line argument
+nifi_registry_no_log: true
 
 # nifi_registry_authorizers_xml_replacements contains a list of dictionaries of XPath expressions
-# This can be used to add, modify, or remove any property from the default 'authorizers.xml` stored in files/conf/
+# This can be used to add, modify, or remove any property from the default `authorizers.xml` stored in files/conf/
+#
+# Apache NiFi Registry only consults this file when it is secured, which this role does not do by default.
 #
 # Example:
 # nifi_registry_authorizers_xml_replacements:
-#   - xpath: /authorizers/authorizer/identifier
-#     value: single-user-authorizer
-#   - xpath: /authorizers/authorizer/class
-#     value: org.apache.nifi.authorization.single.user.SingleUserAuthorizer
+#   - xpath: /authorizers/accessPolicyProvider/property[@name='Initial Admin Identity']
+#     value: admin@example.com
 nifi_registry_authorizers_xml_replacements: []
 
+# nifi_registry_identity_providers_xml_replacements contains a list of dictionaries of XPath expressions
+# This can be used to add, modify, or remove any property from the default `identity-providers.xml` stored in files/conf/
+#
+# Apache NiFi Registry only consults this file when it is secured, which this role does not do by default.
+nifi_registry_identity_providers_xml_replacements: []
+
 # nifi_registry_logback_xml_replacements contains a list of dictionaries of XPath expressions
-# This can be used to add, modify, or remove any property from the default 'logback.xml` stored in files/conf/
+# This can be used to add, modify, or remove any property from the default `logback.xml` stored in files/conf/
 #
 # Example:
 # nifi_registry_logback_xml_replacements:
-#   - xpath: /configuration/appender[@name="APP_FILE"]/rollingPolicy/maxFileSize
-#     value: 100MB
 #   - xpath: /configuration/appender[@name="APP_FILE"]/rollingPolicy/maxHistory
-#     value: 30
+#     value: 10
 nifi_registry_logback_xml_replacements: []
 
-# nifi_registry_login_identity_providers_xml_replacements_custom contains a list of dictionaries of XPath expressions
-# This can be used to add, modify, or remove any property from the default 'login-identity-providers.xml` stored in files/conf/
+# nifi_registry_providers_xml_replacements contains a list of dictionaries of XPath expressions
+# This can be used to add, modify, or remove any property from the default `providers.xml` stored in files/conf/
 #
-# See `nifi_registry_login_identity_providers_xml_replacements_default` for an example of what can be defined here
-nifi_registry_login_identity_providers_xml_replacements_custom: []
-
-# The default 'login-identity-providers.xml` replacements to make
-nifi_registry_login_identity_providers_xml_replacements_default:
-  - xpath: /loginIdentityProviders/provider/property[@name='Username']
-    value: "{{ nifi_registry_login_username }}"
-
-  - xpath: /loginIdentityProviders/provider/property[@name='Password']
-    value: "{{ nifi_registry_login_password | password_hash(hashtype='bcrypt', salt=nifi_registry_login_salt) }}"
-
-# The final 'login-identity-providers.xml` replacements to make
-nifi_registry_login_identity_providers_xml_replacements: "{{ nifi_registry_login_identity_providers_xml_replacements_default + nifi_registry_login_identity_providers_xml_replacements_custom }}"
-
-# nifi_registry_state_management_xml_replacements contains a list of dictionaries of XPath expressions
-# This can be used to add, modify, or remove any property from the default 'state-management.xml` stored in files/conf/
+# By default flows are persisted to the file system (`flow_storage` under `nifi_registry_data_path`),
+# and extension bundles likewise (`extension_bundles`).
 #
-# Example:
-# nifi_registry_state_management_xml_replacements:
-#   - xpath: /stateManagement/local-provider/property[@name="Directory"]
-#     value: /state/local
-nifi_registry_state_management_xml_replacements: []
+# Example (store flows in the database instead of on the file system):
+# nifi_registry_providers_xml_replacements:
+#   - xpath: /providers/flowPersistenceProvider/class
+#     value: org.apache.nifi.registry.provider.flow.DatabaseFlowPersistenceProvider
+#   - xpath: /providers/flowPersistenceProvider/property[@name='Flow Storage Directory']
+#     state: absent
+nifi_registry_providers_xml_replacements: []
 
-# nifi_registry_properties_replacements_custom contains a list of dictionaries of default key value pairs
-# This can be used to add, modify, or remove any property from the default 'nifi.properties` stored in files/conf/
+# nifi_registry_registry_aliases_xml_replacements contains a list of dictionaries of XPath expressions
+# This can be used to add, modify, or remove any property from the default `registry-aliases.xml` stored in files/conf/
+nifi_registry_registry_aliases_xml_replacements: []
+
+# nifi_registry_properties_replacements_custom contains a list of dictionaries of key value pairs
+# This can be used to add, modify, or remove any property from the default `nifi-registry.properties` stored in files/conf/
 #
 # Example:
 # nifi_registry_properties_replacements_custom:
-#   - key: nifi.performance.tracking.percentage
+#   - key: nifi.registry.web.jetty.threads
 #     value: 50
 nifi_registry_properties_replacements_custom: []
 
-# nifi_registry_conf_nifi_registry_properties_default contains a list of dictionaries of default key value pairs
-# This can be used to add, modify, or remove any property from the default 'nifi.properties` stored in files/conf/
+# nifi_registry_properties_replacements_default contains a list of dictionaries of default key value pairs
+# applied to the default `nifi-registry.properties` stored in files/conf/
 #
-# To perform additional modifications to `nifi.properties` you should probably use `nifi_registry_properties_replacements_custom`
+# To perform additional modifications to `nifi-registry.properties` you should probably use `nifi_registry_properties_replacements_custom`
 nifi_registry_properties_replacements_default:
-  - key: nifi.sensitive.props.key
-    value: "{{ nifi_registry_sensitive_props_key }}"
-
-  - key: \#nifi.python.command
-    value: python3
-    state: absent
-
-  - key: nifi.python.command
-    value: python3
-
-  - key: nifi.python.extensions.source.directory.default
-    value: /opt/nifi/nifi-current/python_extensions
-
-  - key: nifi.nar.library.autoload.directory
-    value: /opt/nifi/nifi-current/nar_extensions
-
-  - key: nifi.remote.input.socket.port
-    value: 10000
-
-  - key: nifi.web.https.host
+  # Upstream's container startup script binds to the container's hostname, which is not
+  # reachable through `localhost` (e.g. `docker exec ... curl`). Listening on all interfaces
+  # inside the container is what makes it reachable both ways.
+  - key: nifi.registry.web.http.host
     value: 0.0.0.0
 
-  - key: nifi.web.proxy.context.path
-    value: /
+  - key: nifi.registry.web.http.port
+    value: "{{ nifi_registry_container_http_port }}"
 
-  - key: nifi.web.proxy.host
-    value: "{{ nifi_registry_hostname }}:443, {{ nifi_registry_hostname }}:80"
-
-  - key: nifi.cluster.protocol.is.secure
-    value: true
-
-  - key: nifi.security.keystoreType
-    value: jks
-
-  - key: nifi.security.keystore
-    value: /opt/nifi/nifi-current/certs/keystore.jks
-
-  - key: nifi.security.keystore.certificate
-    value: /opt/nifi/nifi-current/certs/certificate.crt
-
-  - key: nifi.security.keystore.privateKey
-    value: /opt/nifi/nifi-current/certs/private.key
-
-  - key: nifi.security.keystorePasswd
-    value: "{{ nifi_registry_self_signed_cert_passphrase }}"
-
-  - key: nifi.security.keyPasswd
-    value: "{{ nifi_registry_self_signed_cert_passphrase }}"
-
-  - key: nifi.security.truststoreType
-    value: jks
-
-  - key: nifi.security.truststore
-    value: /opt/nifi/nifi-current/certs/truststore.jks
-
-  - key: nifi.security.truststorePasswd
-    value: "{{ nifi_registry_self_signed_cert_passphrase }}"
-
-# The final `nifi.properties` configuration
+# The final `nifi-registry.properties` configuration
 # Keys defined in `nifi_registry_properties_replacements_custom` override ones from `nifi_registry_properties_replacements_default`
 nifi_registry_properties_replacements: >-
   {{
@@ -353,22 +362,35 @@ nifi_registry_properties_replacements: >-
     + nifi_registry_properties_replacements_custom
   }}
 
-# nifi_registry_zookeeper_properties_replacements contains a list of dictionaries of key value pairs
-# This can be used to add, modify, or remove any property from the default 'zookeeper.properties` stored in files/conf/
-#
-# Example:
-# nifi_registry_zookeeper_properties_replacements:
-#   - key: dataDir
-#     value: ./state/zookeeper
-nifi_registry_zookeeper_properties_replacements: []
-
 # nifi_registry_bootstrap_conf_replacements contains a list of dictionaries of key value pairs
-# This can be used to add, modify, or remove any property from the default 'bootstrap.conf` stored in files/conf/
+# This can be used to add, modify, or remove any property from the default `bootstrap.conf` stored in files/conf/
 #
-# Example:
+# Example (raise the JVM heap from upstream's 512 MB):
 # nifi_registry_bootstrap_conf_replacements:
 #   - key: java.arg.2
-#     value: -Xms512m
+#     value: -Xms1g
 #   - key: java.arg.3
-#     value: -Xmx512m
+#     value: -Xmx1g
 nifi_registry_bootstrap_conf_replacements: []
+
+# nifi_registry_environment_variables_additional_variables contains a multiline string with additional environment variables to pass to the container.
+#
+# Upstream's `NIFI_REGISTRY_*` / `AUTH` environment variables have no effect with this role:
+# its startup script does not rewrite the configuration from them. Use the `nifi_registry_*_replacements`
+# variables above instead.
+#
+# Example:
+# nifi_registry_environment_variables_additional_variables: |
+#   VAR=1
+#   ANOTHER=value
+nifi_registry_environment_variables_additional_variables: ""
+
+# nifi_registry_restart_necessary controls whether the Apache NiFi Registry systemd
+# service will be restarted (when true) or merely started (when false) by the
+# systemd service manager role (when conditional restart is enabled).
+#
+# This value is automatically computed during installation based on whether
+# any configuration files, the systemd service file, or the container image changed.
+# The default of `false` means "no restart needed" — appropriate when the role's
+# installation tasks haven't run (e.g., due to --tags skipping them).
+nifi_registry_restart_necessary: false

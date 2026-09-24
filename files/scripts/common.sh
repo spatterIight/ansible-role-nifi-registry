@@ -14,11 +14,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-# NIFI_HOME is defined by an ENV command in the backing Dockerfile
-export nifi_bootstrap_file=${NIFI_HOME}/conf/bootstrap.conf
-export nifi_props_file=${NIFI_HOME}/conf/nifi.properties
-export nifi_toolkit_props_file=${HOME}/.nifi-cli.nifi.properties
-export hostname=$(hostname)
 
-# Set Path to include local directory for Astral uv
-export PATH=${PATH}:~/.local/bin
+# NIFI_REGISTRY_HOME is defined by an ENV command in the backing Dockerfile
+export nifi_registry_props_file=${NIFI_REGISTRY_HOME}/conf/nifi-registry.properties
+export hostname=$(hostname)

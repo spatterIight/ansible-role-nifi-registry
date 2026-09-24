@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2026 spatterlight
+# SPDX-FileCopyrightText: 2026 Suguru Hirahara
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+    force: true
+driver:
+  name: docker
+platforms:
+  - name: nifi-registry-${MOLECULE_DISTRO:-ubuntu2604}-default
+    image: "geerlingguy/docker-${MOLECULE_DISTRO:-ubuntu2604}-ansible:latest"
+    command: ${MOLECULE_DOCKER_COMMAND:-""}
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    # Also what gives the inner Docker a /dev/fuse to hand to fuse-overlayfs.
+    # See prepare.yml for why that storage driver is not the fleet's usual vfs.
+    privileged: true
+    pre_build_image: true
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callback_result_format: yaml
+  inventory:
+    group_vars:
+      all:
+        # Helper variables
+        nifi_registry_debug_service_enabled: false
+        nifi_registry_restarts_check_enabled: true
+
+        # Variables for Apache NiFi Registry
+        # Deliberately not the 1000 that owns the installation inside Apache NiFi Registry's image,
+        # which parts of it (`lib/`) are only accessible to. This proves the role runs the process
+        # as the configured user rather than only happening to work for the image's own.
+        nifi_registry_uid: 1234
+        nifi_registry_gid: 1234
+        nifi_registry_hostname: localhost
+        nifi_registry_container_labels_traefik_enabled: false
+
+        # Deliberately not the 18080 that Apache NiFi Registry's own image defaults to, so that reaching
+        # the web interface on this port proves the role's `nifi.registry.web.http.port` replacement
+        # reached the process rather than the image's built-in default having been good enough.
+        nifi_registry_container_http_port: 19080
+        nifi_registry_container_http_host_bind_port: 19080
+
+        # Checked in verify.yml, so that this variable cannot silently stop being rendered
+        # into the `docker create` command as a `--mount` argument.
+        nifi_registry_container_additional_volumes_custom:
+          - type: bind
+            src: /nifi-registry-molecule-extra
+            dst: /nifi-registry-molecule-extra
+            options: readonly
+  env:
+    # This is a hack to resolve https://github.com/ansible/molecule/issues/4391
+    ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..:/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:~/.ansible/roles
+verifier:
+  name: ansible

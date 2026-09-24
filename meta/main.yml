@@ -1,8 +1,10 @@
 ---
 galaxy_info:
   author: spatterlight
-  role_name: nifi-registry
-  description: An Ansible role for installing Apache NiFi Registry, a system to manage flow versioning for Apache NiFi
+  company: spatterlight
+  role_name: nifi_registry
+  namespace: spatterlight
+  description: An Ansible role for installing Apache NiFi Registry, a central store for versioned Apache NiFi flows
   platforms:
     - name: Debian
       versions:

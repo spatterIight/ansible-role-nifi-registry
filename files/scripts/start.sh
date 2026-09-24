@@ -15,17 +15,17 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-scripts_dir='/opt/nifi/scripts'
+scripts_dir='/opt/nifi-registry/scripts'
 
 [ -f "${scripts_dir}/common.sh" ] && . "${scripts_dir}/common.sh"
 
 # Continuously provide logs so that 'docker logs' can produce them
-"${NIFI_HOME}/bin/nifi.sh" run &
-nifi_pid="$!"
-tail -F --pid=${nifi_pid} "${NIFI_HOME}/logs/nifi-app.log" &
+"${NIFI_REGISTRY_HOME}/bin/nifi-registry.sh" run &
+nifi_registry_pid="$!"
+tail -F --pid=${nifi_registry_pid} "${NIFI_REGISTRY_HOME}/logs/nifi-registry-app.log" &
 
-trap 'echo Received trapped signal, beginning shutdown...;./bin/nifi.sh stop;exit 0;' TERM HUP INT;
+trap 'echo Received trapped signal, beginning shutdown...;"${NIFI_REGISTRY_HOME}/bin/nifi-registry.sh" stop;exit 0;' TERM HUP INT;
 trap ":" EXIT
 
-echo NiFi running with PID ${nifi_pid}.
-wait ${nifi_pid}
+echo NiFi-Registry running with PID ${nifi_registry_pid}.
+wait ${nifi_registry_pid}

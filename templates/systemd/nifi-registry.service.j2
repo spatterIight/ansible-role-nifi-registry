@@ -2,7 +2,7 @@
 SPDX-FileCopyrightText: 2023 Slavi Pantaleev
 SPDX-FileCopyrightText: 2024 Nikita Chernyi
 SPDX-FileCopyrightText: 2025 Suguru Hirahara
-SPDX-FileCopyrightText: 2025 spatterlight
+SPDX-FileCopyrightText: 2025 - 2026 spatterlight
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 #}
@@ -21,38 +21,40 @@ DefaultDependencies=no
 [Service]
 Type=simple
 Environment="HOME={{ devture_systemd_docker_base_systemd_unit_home_path }}"
-ExecStartPre=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} stop -t {{ devture_systemd_docker_base_container_stop_grace_time_seconds }} {{ nifi_registry_identifier }} 2>/dev/null || true'
-ExecStartPre=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} rm {{ nifi_registry_identifier }} 2>/dev/null || true'
+ExecStartPre={{ devture_systemd_docker_base_host_command_sh }} -c '{{ nifi_registry_container_cleanup_command | trim | replace("\n", " ") }}'
 
 ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} create \
       --rm \
       --name={{ nifi_registry_identifier }} \
       --log-driver=none \
       --user={{ nifi_registry_uid }}:{{ nifi_registry_gid }} \
+      --group-add={{ nifi_registry_container_image_gid }} \
       --cap-drop=ALL \
       --cap-add=DAC_OVERRIDE \
       --network={{ nifi_registry_container_network }} \
-      {% if nifi_registry_container_https_host_bind_port %}
-      -p {{ nifi_registry_container_https_host_bind_port }}:{{ nifi_registry_container_https_port }} \
+      {% if nifi_registry_container_http_host_bind_port %}
+      -p {{ nifi_registry_container_http_host_bind_port }}:{{ nifi_registry_container_http_port }} \
       {% endif %}
       --env-file={{ nifi_registry_base_path }}/env \
       --label-file={{ nifi_registry_base_path }}/labels \
-      --mount type=bind,src={{ nifi_registry_data_path }}/database_repository,dst=/opt/nifi/nifi-current/database_repository \
-      --mount type=bind,src={{ nifi_registry_data_path }}/flowfile_repository,dst=/opt/nifi/nifi-current/flowfile_repository \
-      --mount type=bind,src={{ nifi_registry_data_path }}/content_repository,dst=/opt/nifi/nifi-current/content_repository \
-      --mount type=bind,src={{ nifi_registry_data_path }}/provenance_repository,dst=/opt/nifi/nifi-current/provenance_repository \
-      --mount type=bind,src={{ nifi_registry_data_path }}/state,dst=/opt/nifi/nifi-current/state \
-      --mount type=bind,src={{ nifi_registry_data_path }}/logs,dst=/opt/nifi/nifi-current/logs \
-      --mount type=bind,src={{ nifi_registry_data_path }}/conf,dst=/opt/nifi/nifi-current/conf \
-      --mount type=bind,src={{ nifi_registry_certs_path }},dst=/opt/nifi/nifi-current/certs \
-      --mount type=bind,src={{ nifi_registry_scripts_path }},dst=/opt/nifi/scripts \
+      --mount type=bind,src={{ nifi_registry_data_path }}/conf,dst=/opt/nifi-registry/nifi-registry-current/conf \
+      --mount type=bind,src={{ nifi_registry_data_path }}/database,dst=/opt/nifi-registry/nifi-registry-current/database \
+      --mount type=bind,src={{ nifi_registry_data_path }}/flow_storage,dst=/opt/nifi-registry/nifi-registry-current/flow_storage \
+      --mount type=bind,src={{ nifi_registry_data_path }}/extension_bundles,dst=/opt/nifi-registry/nifi-registry-current/extension_bundles \
+      --mount type=bind,src={{ nifi_registry_data_path }}/logs,dst=/opt/nifi-registry/nifi-registry-current/logs \
+      --mount type=bind,src={{ nifi_registry_data_path }}/work,dst=/opt/nifi-registry/nifi-registry-current/work \
+      --mount type=bind,src={{ nifi_registry_data_path }}/run,dst=/opt/nifi-registry/nifi-registry-current/run \
+      --mount type=bind,src={{ nifi_registry_scripts_path }},dst=/opt/nifi-registry/scripts,readonly \
       {% for volume in nifi_registry_container_additional_volumes %}
       --mount type={{ volume.type | default('bind' if '/' in volume.src else 'volume') }},src={{ volume.src }},dst={{ volume.dst }}{{ (',' + volume.options) if volume.options else '' }} \
       {% endfor %}
       {% for arg in nifi_registry_container_extra_arguments %}
       {{ arg }} \
       {% endfor %}
-      {{ nifi_registry_container_image_self_build_name if nifi_registry_container_image_self_build else nifi_registry_container_image }}
+      {{ nifi_registry_container_image }} \
+      {% for arg in nifi_registry_process_extra_arguments %}
+      {{ arg }} \
+      {% endfor %}
 
 {% for network in nifi_registry_container_additional_networks %}
 ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} network connect {{ network }} {{ nifi_registry_identifier }}
@@ -60,7 +62,7 @@ ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} network conne
 
 ExecStart={{ devture_systemd_docker_base_host_command_docker }} start --attach {{ nifi_registry_identifier }}
 
-ExecStop=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} stop -t {{ devture_systemd_docker_base_container_stop_grace_time_seconds }} {{ nifi_registry_identifier }} 2>/dev/null || true'
+ExecStop=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} stop -t {{ nifi_registry_container_stop_grace_time_seconds }} {{ nifi_registry_identifier }} 2>/dev/null || true'
 ExecStop=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} rm {{ nifi_registry_identifier }} 2>/dev/null || true'
 
 Restart=always

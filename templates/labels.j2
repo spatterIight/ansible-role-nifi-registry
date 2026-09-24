@@ -1,7 +1,7 @@
 {#
 SPDX-FileCopyrightText: 2023 Slavi Pantaleev
 SPDX-FileCopyrightText: 2025 Suguru Hirahara
-SPDX-FileCopyrightText: 2025 spatterlight
+SPDX-FileCopyrightText: 2025 - 2026 spatterlight
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 #}
@@ -15,15 +15,17 @@ traefik.docker.network={{ nifi_registry_container_labels_traefik_docker_network 
 
 {% set middlewares = [] %}
 
-{% if nifi_registry_container_labels_traefik_path_prefix != '/' %}
-traefik.http.middlewares.{{ nifi_registry_identifier }}-slashless-redirect.redirectregex.regex=^({{ nifi_registry_container_labels_traefik_path_prefix | quote }})$
-traefik.http.middlewares.{{ nifi_registry_identifier }}-slashless-redirect.redirectregex.replacement=${1}/
-{% set middlewares = middlewares + [nifi_registry_identifier + '-slashless-redirect'] %}
+{% if nifi_registry_container_labels_traefik_basic_auth_enabled %}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-basic-auth.basicauth.users={{ nifi_registry_container_labels_traefik_basic_auth_users | join(',') }}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-basic-auth.basicauth.realm={{ nifi_registry_identifier }}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-basic-auth.basicauth.removeheader=true
+{% set middlewares = middlewares + [nifi_registry_identifier + '-basic-auth'] %}
 {% endif %}
 
-{% if nifi_registry_container_labels_traefik_path_prefix != '/' %}
-traefik.http.middlewares.{{ nifi_registry_identifier }}-strip-prefix.stripprefix.prefixes={{ nifi_registry_container_labels_traefik_path_prefix }}
-{% set middlewares = middlewares + [nifi_registry_identifier + '-strip-prefix'] %}
+{% if nifi_registry_container_labels_traefik_root_redirect_enabled %}
+traefik.http.middlewares.{{ nifi_registry_identifier }}-root-redirect.redirectregex.regex=^(https?://[^/]+)/?$
+traefik.http.middlewares.{{ nifi_registry_identifier }}-root-redirect.redirectregex.replacement=${1}/nifi-registry/
+{% set middlewares = middlewares + [nifi_registry_identifier + '-root-redirect'] %}
 {% endif %}
 
 {% if nifi_registry_container_labels_traefik_additional_request_headers.keys() | length > 0 %}
@@ -40,6 +42,8 @@ traefik.http.middlewares.{{ nifi_registry_identifier }}-add-response-headers.hea
 {% set middlewares = middlewares + [nifi_registry_identifier + '-add-response-headers'] %}
 {% endif %}
 
+{% set middlewares = middlewares + nifi_registry_container_labels_traefik_additional_middlewares %}
+
 traefik.http.routers.{{ nifi_registry_identifier }}.rule={{ nifi_registry_container_labels_traefik_rule }}
 {% if nifi_registry_container_labels_traefik_priority | int > 0 %}
 traefik.http.routers.{{ nifi_registry_identifier }}.priority={{ nifi_registry_container_labels_traefik_priority }}
@@ -54,9 +58,9 @@ traefik.http.routers.{{ nifi_registry_identifier }}.tls={{ nifi_registry_contain
 traefik.http.routers.{{ nifi_registry_identifier }}.tls.certResolver={{ nifi_registry_container_labels_traefik_tls_certResolver }}
 {% endif %}
 
-traefik.http.services.{{ nifi_registry_identifier }}.loadbalancer.server.port={{ nifi_registry_container_https_port }}
-traefik.http.services.{{ nifi_registry_identifier }}.loadbalancer.server.scheme=https
-traefik.http.services.{{ nifi_registry_identifier }}.loadbalancer.serverstransport={{ nifi_registry_container_labels_traefik_serverstransport }}
+traefik.http.services.{{ nifi_registry_identifier }}.loadbalancer.server.port={{ nifi_registry_container_http_port }}
 {% endif %}
 
-{{ nifi_registry_container_labels_additional_labels }}
+{% for arg in nifi_registry_container_labels_additional_labels %}
+{{ arg }}
+{% endfor %}

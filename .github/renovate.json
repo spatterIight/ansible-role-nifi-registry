@@ -1,0 +1,11 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Patch-level bumps of Apache NiFi Registry automerge here: the Molecule run creates a bucket through the API, asserts that the process reports the version defaults/main.yml pins, and fails if files/conf/ stops matching that image - which is the by-hand reconciliation docs/updating-nifi-registry.md describes, turned into a gate.",
+    "A patch release that does change a shipped configuration file therefore fails CI instead of merging. Minor and major bumps stay human-reviewed pull requests."
+  ],
+  "extends": [
+    "github>mother-of-all-self-hosting/renovate-config#v1.1.0",
+    "github>mother-of-all-self-hosting/renovate-config//patch-automerge#v1.1.0"
+  ]
+}

@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2026 spatterlight
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Prepare Apache NiFi Registry Molecule tests
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Ensure apt cache is updated for Apache NiFi Registry Molecule tests preparation
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 600
+      when: ansible_facts["os_family"] == 'Debian'
+
+    - name: Ensure required packages are installed for Apache NiFi Registry Molecule tests preparation
+      ansible.builtin.package:
+        name:
+          # Used by the `ansible.builtin.uri` calls in verify.yml
+          - python3-requests
+          # Used by the `community.general.xml` tasks the role runs
+          - python3-lxml
+          # The storage driver Docker is configured with below. `overlay2` cannot be nested inside
+          # the container Molecule runs these tests in, and `vfs` (the usual fallback) has no
+          # copy-on-write, so it writes out every layer of the image in full.
+          - fuse-overlayfs
+        state: present
+
+    - name: Ensure Docker is installed for Apache NiFi Registry Molecule tests preparation
+      ansible.builtin.include_role:
+        name: ansible-role-docker
+      vars:
+        docker_daemon_options:
+          storage-driver: fuse-overlayfs
+
+    # Mounted into the container through `nifi_registry_container_additional_volumes_custom` (see molecule.yml),
+    # so that verify.yml can tell whether that variable really reaches the `docker create` command
+    # instead of being silently inert.
+    - name: Ensure directory for the additional volume check exists for Apache NiFi Registry Molecule tests preparation
+      ansible.builtin.file:
+        path: /nifi-registry-molecule-extra
+        state: directory
+        mode: "0755"
+
+    - name: Ensure marker file for the additional volume check exists for Apache NiFi Registry Molecule tests preparation
+      ansible.builtin.copy:
+        content: "mounted-via-nifi_registry_container_additional_volumes\n"
+        dest: /nifi-registry-molecule-extra/marker.txt
+        mode: "0644"

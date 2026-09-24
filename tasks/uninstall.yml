@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2023 Slavi Pantaleev
 # SPDX-FileCopyrightText: 2025 Suguru Hirahara
-# SPDX-FileCopyrightText: 2025 spatterlight
+# SPDX-FileCopyrightText: 2025 - 2026 spatterlight
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -33,11 +33,6 @@
         - env
         - labels
 
-    - name: Ensure Apache NiFi Registry image source files path does not exist
-      ansible.builtin.file:
-        path: "{{ nifi_registry_container_image_self_build_src_files_path }}"
-        state: absent
-
     - name: Ensure Apache NiFi Registry local data path does not exist if empty
       ansible.builtin.command:
         cmd: "rmdir {{ nifi_registry_data_path }}"
@@ -64,8 +59,8 @@
         cmd: >-
           {{ devture_systemd_docker_base_host_command_docker }} network rm
           {{ nifi_registry_container_network }}
-      register: network_deletion_result
-      changed_when: nifi_registry_container_network in network_deletion_result.stdout
+      register: nifi_registry_network_deletion_result
+      changed_when: nifi_registry_container_network in nifi_registry_network_deletion_result.stdout
 
 - name: Check existence of Apache NiFi Registry local data path
   ansible.builtin.stat:
