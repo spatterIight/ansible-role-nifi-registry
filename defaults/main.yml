@@ -113,8 +113,7 @@ nifi_registry_container_labels_traefik_root_redirect_enabled: true
 # the only thing standing between the public hostname and full read/write access. It is enabled by default,
 # and the role refuses to run with it enabled but `nifi_registry_basic_auth_password` empty.
 #
-# Only disable it if something else in front of Traefik (e.g. a forward-auth / SSO middleware you add via
-# `nifi_registry_container_labels_traefik_additional_middlewares_custom`) authenticates requests instead.
+# Only disable it if something else in front of Apache NiFi Registry authenticates requests instead.
 nifi_registry_container_labels_traefik_basic_auth_enabled: true
 
 # The `username:hash` entries the basic-auth middleware accepts.
@@ -158,11 +157,6 @@ nifi_registry_container_labels_traefik_additional_response_headers_auto: |
     | combine ({'Strict-Transport-Security': nifi_registry_http_header_strict_transport_security} if nifi_registry_http_header_strict_transport_security and nifi_registry_container_labels_traefik_tls else {})
   }}
 nifi_registry_container_labels_traefik_additional_response_headers_custom: {}
-
-# A list of additional Traefik middlewares (e.g. `my-sso@file`) to attach to the router, after the ones this role defines.
-nifi_registry_container_labels_traefik_additional_middlewares: "{{ nifi_registry_container_labels_traefik_additional_middlewares_auto + nifi_registry_container_labels_traefik_additional_middlewares_custom }}"
-nifi_registry_container_labels_traefik_additional_middlewares_auto: []
-nifi_registry_container_labels_traefik_additional_middlewares_custom: []
 
 # nifi_registry_container_labels_additional_labels contains a list of additional labels to add to the container label file.
 # See `../templates/labels.j2` for details.

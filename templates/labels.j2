@@ -42,8 +42,6 @@ traefik.http.middlewares.{{ nifi_registry_identifier }}-add-response-headers.hea
 {% set middlewares = middlewares + [nifi_registry_identifier + '-add-response-headers'] %}
 {% endif %}
 
-{% set middlewares = middlewares + nifi_registry_container_labels_traefik_additional_middlewares %}
-
 traefik.http.routers.{{ nifi_registry_identifier }}.rule={{ nifi_registry_container_labels_traefik_rule }}
 {% if nifi_registry_container_labels_traefik_priority | int > 0 %}
 traefik.http.routers.{{ nifi_registry_identifier }}.priority={{ nifi_registry_container_labels_traefik_priority }}
