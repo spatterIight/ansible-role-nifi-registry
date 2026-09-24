@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2023 Julian-Samuel Gebühr
+# SPDX-FileCopyrightText: 2023 MASH project contributors
+# SPDX-FileCopyrightText: 2023 - 2025 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2025 Suguru Hirahara
+# SPDX-FileCopyrightText: 2025 - 2026 spatterlight
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Fail if required Apache NiFi Registry settings not defined
+  ansible.builtin.fail:
+    msg: >-
+      You need to define a required configuration setting (`{{ item }}`).
+  when: "lookup('vars', item, default='') | string | length == 0"
+  with_items:
+    - nifi_registry_uid
+    - nifi_registry_gid
+    - nifi_registry_path_prefix
+    - nifi_registry_container_network
+
+- name: Run if Traefik is enabled
+  when: nifi_registry_container_labels_traefik_enabled | bool
+  block:
+    - name: Fail if Traefik settings required for Apache NiFi Registry are not defined
+      ansible.builtin.fail:
+        msg: >-
+          You need to define a required configuration setting (`{{ item }}`).
+      when: "lookup('vars', item, default='') | string | length == 0"
+      with_items:
+        - nifi_registry_hostname
+        - nifi_registry_container_labels_traefik_hostname
+        - nifi_registry_container_labels_traefik_path_prefix
+
+    - name: Fail if nifi_registry_container_labels_traefik_path_prefix is different than /
+      ansible.builtin.fail:
+        msg: >-
+          nifi_registry_container_labels_traefik_path_prefix (`{{ nifi_registry_container_labels_traefik_path_prefix }}`) must be `/`.
+          Apache NiFi Registry does not support hosting under a subpath.
+      when: "nifi_registry_container_labels_traefik_path_prefix != '/'"
+
+    # Apache NiFi Registry runs unsecured, so exposing it through Traefik without the basic-auth
+    # middleware (or a replacement for it) would give anyone who can reach the hostname full read/write access.
+    - name: Fail if Apache NiFi Registry would be exposed through Traefik without authentication
+      ansible.builtin.fail:
+        msg: >-
+          `nifi_registry_basic_auth_password` must be set, since Apache NiFi Registry has no authentication of its own
+          and `nifi_registry_container_labels_traefik_basic_auth_enabled` protects it with HTTP basic authentication.
+          If something else authenticates requests before they reach it, set
+          `nifi_registry_container_labels_traefik_basic_auth_enabled: false` instead.
+      when:
+        - nifi_registry_container_labels_traefik_basic_auth_enabled | bool
+        - nifi_registry_container_labels_traefik_basic_auth_users | length == 0
+
+    - name: Fail if the Apache NiFi Registry basic auth salt is invalid
+      ansible.builtin.fail:
+        msg: >-
+          `nifi_registry_basic_auth_salt` must be exactly 22 characters from the bcrypt alphabet (`./A-Za-z0-9`).
+      when:
+        - nifi_registry_container_labels_traefik_basic_auth_enabled | bool
+        - nifi_registry_basic_auth_password | length > 0
+        - nifi_registry_basic_auth_salt is not match('^[./A-Za-z0-9]{22}$')
