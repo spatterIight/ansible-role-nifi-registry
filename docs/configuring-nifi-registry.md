@@ -80,19 +80,6 @@ The password is bcrypt-hashed with a fixed salt (`nifi_registry_basic_auth_salt`
 
 To let more than one person in, add further `username:hash` entries (e.g. generated via `htpasswd -nbB user password`) to `nifi_registry_container_labels_traefik_basic_auth_users_custom`.
 
-### Using a different authentication method
-
-If something else in front of Traefik already authenticates requests (for example a forward-auth / single sign-on middleware), you can attach it and turn off basic authentication:
-
-```yaml
-nifi_registry_container_labels_traefik_basic_auth_enabled: false
-
-nifi_registry_container_labels_traefik_additional_middlewares_custom:
-  - my-sso@file
-```
-
-The role refuses to run with basic authentication enabled but no credentials configured, so it cannot end up exposed without authentication by accident.
-
 ### Connecting Apache NiFi
 
 Apache NiFi needs to be attached to the Apache NiFi Registry container network. If you use the [Apache NiFi role](https://github.com/spatterIight/ansible-role-nifi) on the same host:
